@@ -4,8 +4,17 @@
 #######################################################################################################################-
 
 load("1_explore.rdata")
-source("0_init.R")
-add_boot = FALSE
+source("./code/0_init.R")
+
+
+## Initialize parallel processing
+Sys.getenv("NUMBER_OF_PROCESSORS") 
+cl = makeCluster(4)
+registerDoParallel(cl) 
+# stopCluster(cl) #stop cluster
+
+
+l.boot = NULL
 
 
 
@@ -73,7 +82,6 @@ fit.gbm = train( df.interpret[c("INT",predictors)], df.interpret$target, trContr
 
 ## Get model for bootstrapped data and collect all models into one list
 nboot = 20
-add_boot = TRUE #for following plots
 l.boot = foreach(i = 1:nboot, .combine = c, .packages = c("caret")) %dopar% { 
   
   # Bootstrap
