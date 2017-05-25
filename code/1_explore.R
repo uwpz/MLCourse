@@ -3,7 +3,8 @@
 # Initialize ----
 #######################################################################################################################-
 
-source("0_init.R")
+source("./code/0_init.R")
+
 
 
 #######################################################################################################################-
@@ -92,7 +93,7 @@ metr = setdiff(metr, c("xxx","xxx")) #Put at xxx the variables to remove
 
 
 ## Check
-plot_distr_metr("./output/distr_metr.pdf", df, vars = metr, misspct = misspct, ncols = 3, nrows = 2, color = twocol)
+plot_distr_metr("./output/distr_metr_final.pdf", df, vars = metr, misspct = misspct, ncols = 3, nrows = 2, color = twocol)
 
 
 

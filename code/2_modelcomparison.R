@@ -4,8 +4,14 @@
 #######################################################################################################################-
 
 load("1_explore.rdata")
-source("0_init.R")
+source("./code/0_init.R")
 
+
+## Initialize parallel processing
+Sys.getenv("NUMBER_OF_PROCESSORS") 
+cl = makeCluster(4)
+registerDoParallel(cl) 
+# stopCluster(cl) #stop cluster
 
 
 
