@@ -12,7 +12,7 @@ source("./code/0_init.R")
 #######################################################################################################################-
 
 ## Read data
-df.orig = read_csv("thyroid.csv", col_names = TRUE)
+df.orig = read_csv("./data/thyroid.csv", col_names = TRUE)
 skip = function() {
   # Check some stuff
   summary(mutate_if(df.orig, is.character, as.factor))

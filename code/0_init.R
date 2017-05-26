@@ -274,7 +274,6 @@ plot_corr_nomi <- function(outpdf, df, vars,
 }
 
 
-
 ## ROC, Calibration, Gain, Lift, Confusion
 plot_performance = function(outpdf, yhat_holdout, y_holdout, 
                             ncols = 3, nrows = 2, color = "blue", w = 12, h = 8) {
@@ -283,16 +282,21 @@ plot_performance = function(outpdf, yhat_holdout, y_holdout,
   pred_obj = prediction(yhat_holdout, y_holdout)
   auc = performance(pred_obj, "auc" )@y.values[[1]]
   tprfpr = performance( pred_obj, "tpr", "fpr")
+  df.roc = data.frame("fpr" = tprfpr@x.values[[1]], "tpr" = tprfpr@y.values[[1]])
+  i.alpha = map_int(seq(0.1,0.9,0.1), function(.) which.min(abs(tprfpr@alpha.values[[1]] - .)))
   precrec = performance( pred_obj, "ppv", "rec")
   df.precrec = data.frame("rec" = precrec@x.values[[1]], "prec" = precrec@y.values[[1]], 
                           x = 100*(1:length(precrec@x.values[[1]]))/length(precrec@x.values[[1]]))
   df.precrec[is.nan(df.precrec$prec),"prec"] = 1
   
-  
   # ROC
-  p_roc = ggplot(data.frame("fpr" = tprfpr@x.values[[1]], "tpr" = tprfpr@y.values[[1]]), aes(x = fpr, y = tpr)) +
+  p_roc = ggplot(df.roc, aes(x = fpr, y = tpr)) +
     geom_line(color = "blue", size = .5) +
     geom_abline(intercept = 0, slope = 1, color = "grey") + 
+    geom_point(aes(fpr, tpr), data = df.roc[i.alpha,], color = "red", size = 0.5) +
+    scale_x_continuous(limits = c(0,1), breaks = seq(0,1,0.1)) + 
+    scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.1)) +
+    
     labs(title = paste0("ROC (auc=", round(auc,3), ")"), x = expression(paste("fpr: P(", hat(y), "=1|y=0)", sep = "")),
          y = expression(paste("tpr: P(", hat(y), "=1|y=1)", sep = ""))) + 
     #geom_label(data = data.frame(x = 0.9, y = 0.1, text = paste0("AUC: ",round(auc,3))), aes(x = x, y = y, label = text)) +
@@ -303,18 +307,19 @@ plot_performance = function(outpdf, yhat_holdout, y_holdout,
   tmp = ifelse(y_holdout == "Y", 1, 0)[order(yhat_holdout, decreasing = TRUE)] 
   df.gain = data.frame("x" = 100*(1:length(yhat_holdout))/length(yhat_holdout),
                        "gain" = 100*cumsum(tmp)/sum(tmp))
-  df.gain$lift = df.gain$gain/df.gain$x                     
+  df.gain$lift = df.gain$gain/df.gain$x  
   p_gain = ggplot(df.gain) +
-    geom_polygon(aes(x, y), data.frame(x = c(0,100,100*sum(tmp)/length(tmp)), y = c(0,100,100)), fill = "grey90") +
+    geom_polygon(aes(x, y), data.frame(x = c(0,100,100*sum(tmp)/length(tmp)), y = c(0,100,100)), 
+                 fill = "grey90", alpha = 0.5) +
     geom_line(aes(x, gain), df.gain, color = "blue", size = .5) +
-    labs(title = "Gain", x = "% Samples Tested", y = "% Positive Samples Found") +
+    scale_x_continuous(limits = c(0,100), breaks = seq(0,100,10)) + 
+    labs(title = "Gain", x = "% Samples Tested", y = "% Samples Found") +
     theme_my 
-  p_gain
   p_lift = ggplot(df.gain) +
     geom_line(aes(x, lift), df.gain, color = "blue", size = .5) +
+    scale_x_continuous(limits = c(0,100), breaks = seq(0,100,10)) + 
     labs(title = "Lift", x = "% Samples Tested", y = "Lift") +
     theme_my 
-  
   
   # Calibrate:  CORRECT also for all data as invariant to undersampling 
   df.calib = calibration(y~yhat, data.frame(y = y_holdout, yhat = 1 - yhat_holdout), cuts = 5)$data
@@ -322,25 +327,27 @@ plot_performance = function(outpdf, yhat_holdout, y_holdout,
     geom_line(color = "blue") +
     geom_point(color = "blue") +  
     geom_abline(intercept = 0, slope = 1, color = "grey") + 
-    scale_x_continuous(limits = c(0,100)) + scale_y_continuous(limits = c(0,100)) +
+    scale_x_continuous(limits = c(0,100), breaks = seq(10,90,20)) + 
+    scale_y_continuous(limits = c(0,100), breaks = seq(0,100,10)) +
     labs(title = "Calibration", x = "Midpoint Predicted Event Probability", y = "Observed Event Percentage") +
     theme_my 
-  
   
   # Precision Recall: NOT CORRECT for all data due to undersampling -> need to oversample positives (y_holdout) and ...  
   # ... adapt predictions (yhat_holdout)
   p_precrec = ggplot(df.precrec, aes(rec, prec)) +
     geom_line(color = "blue", size = .5) +
+    geom_point(aes(x = ), df.precrec[i.alpha,], color = "red", size = 0.5) +
+    scale_x_continuous(breaks = seq(0,1,0.1)) +
     labs(title = "Precision Recall Curve", x = expression(paste("recall=tpr: P(", hat(y), "=1|y=1)", sep = "")),
          y = expression(paste("precision: P(y=1|", hat(y), "=1)", sep = ""))) +
     theme_my 
-  p_precrec
-  # p_prec = ggplot(df.precrec, aes(x, prec)) +
-  #   geom_line(color = "blue", size = 1) +
-  #   labs(title = "Precision", x = "% Samples Tested",
-  #        y = expression(paste("precision: P(y=1|", hat(y), "=1)", sep = ""))) +
-  #   theme_my 
-  
+  p_prec = ggplot(df.precrec, aes(x, prec)) +
+    geom_line(color = "blue", size = .5) +
+    geom_point(aes(x, prec), df.precrec[i.alpha,], color = "red", size = 0.5) +
+    scale_x_continuous(breaks = seq(0,100,10)) +
+    labs(title = "Precision", x = "% Samples Tested",
+         y = expression(paste("precision: P(y=1|", hat(y), "=1)", sep = ""))) +
+    theme_my
   
   # Condusion Matrix: NOT CORRECT for all data due to undersampling
   conf_obj = confusionMatrix(ifelse(yhat_holdout > 0.5,"Y","N"), y_holdout)
@@ -354,9 +361,8 @@ plot_performance = function(outpdf, yhat_holdout, y_holdout,
     theme_my 
   p_confu
   
-  
   # Plot
-  plots = list(p_roc, p_calib, p_confu, p_gain, p_lift, p_precrec)
+  plots = list(p_roc, p_calib, p_confu, p_gain, p_precrec, p_prec)
   ggsave(outpdf, marrangeGrob(plots, ncol = ncols, nrow = nrows, top = NULL), width = w, height = h)
 }
 
