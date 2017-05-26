@@ -14,6 +14,7 @@ registerDoParallel(cl)
 # stopCluster(cl) #stop cluster
 
 
+# Do not bootstrap
 l.boot = NULL
 
 
