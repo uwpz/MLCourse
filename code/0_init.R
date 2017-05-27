@@ -275,10 +275,11 @@ plot_corr_nomi <- function(outpdf, df, vars,
 
 
 ## ROC, Calibration, Gain, Lift, Confusion
-plot_performance = function(outpdf, yhat_holdout, y_holdout, 
-                            ncols = 3, nrows = 2, color = "blue", w = 12, h = 8) {
+plot_performance = function(outpdf, yhat_holdout, y_holdout, color = "blue", colors = twocol,
+                            ncols = 4, nrows = 2, w = 18, h = 12) {
   
   # Prepare
+  df.distr = data.frame(y = y_holdout, yhat = yhat_holdout)
   pred_obj = prediction(yhat_holdout, y_holdout)
   auc = performance(pred_obj, "auc" )@y.values[[1]]
   tprfpr = performance( pred_obj, "tpr", "fpr")
@@ -293,7 +294,7 @@ plot_performance = function(outpdf, yhat_holdout, y_holdout,
   p_roc = ggplot(df.roc, aes(x = fpr, y = tpr)) +
     geom_line(color = "blue", size = .5) +
     geom_abline(intercept = 0, slope = 1, color = "grey") + 
-    geom_point(aes(fpr, tpr), data = df.roc[i.alpha,], color = "red", size = 0.5) +
+    geom_point(aes(fpr, tpr), data = df.roc[i.alpha,], color = "red", size = 0.8) +
     scale_x_continuous(limits = c(0,1), breaks = seq(0,1,0.1)) + 
     scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.1)) +
     
@@ -301,6 +302,27 @@ plot_performance = function(outpdf, yhat_holdout, y_holdout,
          y = expression(paste("tpr: P(", hat(y), "=1|y=1)", sep = ""))) + 
     #geom_label(data = data.frame(x = 0.9, y = 0.1, text = paste0("AUC: ",round(auc,3))), aes(x = x, y = y, label = text)) +
     theme_my 
+  
+  # Stratified distribution of predictions (plot similar to plot_distr_metr)
+  p_distr = ggplot(data = df.distr, aes_string("yhat")) +
+    geom_histogram(aes(y = ..density.., fill = y), bins = 40, position = "identity") +
+    geom_density(aes(color = y)) +
+    scale_fill_manual(values = alpha(colors, .2), name = "Target (y)") + 
+    scale_color_manual(values = colors, name = "Target (y)") +
+    labs(title = "Predictions", x = expression(paste("Prediction (", hat(y),")", sep = ""))) +
+    guides(fill = guide_legend(reverse = TRUE), color = guide_legend(reverse = TRUE))
+  tmp = ggplot_build(p_distr)
+  p.inner = ggplot(data = df.distr, aes_string("y", "yhat")) +
+    geom_boxplot(aes_string(color = "y")) +
+    coord_flip() +
+    scale_y_continuous(limits = c(min(tmp$data[[1]]$xmin), max(tmp$data[[1]]$xmax))) +
+    scale_color_manual(values = colors, name = "Target") +
+    theme_void() +
+    theme(legend.position = "none")
+  p_distr = p_distr + 
+    scale_y_continuous(limits = c(-tmp$layout$panel_ranges[[1]]$y.range[2]/10, NA)) +
+    theme_my +
+    annotation_custom(ggplotGrob(p.inner), xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0) 
   
   # Gain + Lift: NOT CORRECT for all data due to undersampling -> need to oversample positives (y_holdout) and ...  
   # ... adapt predictions (yhat_holdout)
@@ -336,14 +358,14 @@ plot_performance = function(outpdf, yhat_holdout, y_holdout,
   # ... adapt predictions (yhat_holdout)
   p_precrec = ggplot(df.precrec, aes(rec, prec)) +
     geom_line(color = "blue", size = .5) +
-    geom_point(aes(x = ), df.precrec[i.alpha,], color = "red", size = 0.5) +
+    geom_point(aes(x = ), df.precrec[i.alpha,], color = "red", size = 0.8) +
     scale_x_continuous(breaks = seq(0,1,0.1)) +
     labs(title = "Precision Recall Curve", x = expression(paste("recall=tpr: P(", hat(y), "=1|y=1)", sep = "")),
          y = expression(paste("precision: P(y=1|", hat(y), "=1)", sep = ""))) +
     theme_my 
   p_prec = ggplot(df.precrec, aes(x, prec)) +
     geom_line(color = "blue", size = .5) +
-    geom_point(aes(x, prec), df.precrec[i.alpha,], color = "red", size = 0.5) +
+    geom_point(aes(x, prec), df.precrec[i.alpha,], color = "red", size = 0.8) +
     scale_x_continuous(breaks = seq(0,100,10)) +
     labs(title = "Precision", x = "% Samples Tested",
          y = expression(paste("precision: P(y=1|", hat(y), "=1)", sep = ""))) +
@@ -359,10 +381,9 @@ plot_performance = function(outpdf, yhat_holdout, y_holdout,
     scale_y_discrete(limits = rev(levels(df.confu$Reference))) +
     labs(title = paste0("Confusion Matrix (Accuracy = ", round(conf_obj$overall["Accuracy"], 3), ")")) +
     theme_my 
-  p_confu
-  
+
   # Plot
-  plots = list(p_roc, p_calib, p_confu, p_gain, p_precrec, p_prec)
+  plots = list(p_roc, p_confu, p_distr, p_calib, p_gain, p_lift, p_precrec, p_prec)
   ggsave(outpdf, marrangeGrob(plots, ncol = ncols, nrow = nrows, top = NULL), width = w, height = h)
 }
 
