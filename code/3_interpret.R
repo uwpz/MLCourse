@@ -62,6 +62,7 @@ for (sim in 1:nsim) {
 
 ## Plot performance
 plot_performance("./output/performance.pdf", yhat_holdout, y_holdout)
+#cor(yhat_holdout, ifelse(y_holdout == "N", 0, 1), method = "spearman")
 
 
 
