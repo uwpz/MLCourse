@@ -122,7 +122,7 @@ plot(fit.gbm$finalModel, i.var = 7, type = "response")
 # Partial dependence only for topn important variables 
 topn = 10
 (topn_varimp = rownames(varImp(fit.gbm)$importance)[order(varImp(fit.gbm)$importance, decreasing = TRUE)][1:topn])
-plot_partialdependence("./output/partialdependance_gbm.pdf", vars = topn_varimp, l.boot = l.boot, 
+plot_partialdependence("./output/partialdependance_gbm.pdf", vars = topn_varimp, l.boot = l.boot, CI = TRUE,
                        ylim = c(0,0.3), ncols = 5, nrows = 2, w = 18, h = 12)
 
 

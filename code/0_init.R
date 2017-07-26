@@ -11,6 +11,7 @@ skip = function() {
 
 #library(doSNOW)
 library(doParallel)
+library(plyr)
 library(tidyverse)
 
 library(corrplot)
@@ -117,7 +118,7 @@ plot_distr_metr = function(outpdf, df = df.plot, vars = metr, nbins = 20, misspc
       geom_density(aes(color = target)) +
       scale_fill_manual(values = alpha(color, .2), name = "Target") + 
       scale_color_manual(values = color, name = "Target") +
-      labs(title = paste0(.," (Imp.: ", round(varimp[.],2),")"),
+      labs(title = paste0(.," (VI: ", round(varimp[.],2),")"),
            x = paste0(.," (NA: ", misspct[.] * 100,"%)"))
     
     # Get underlying data for max of y-value and range of x-value
@@ -174,7 +175,7 @@ plot_distr_nomi = function(outpdf, df = df.plot, vars = nomi, color = twocol,
     # Plot
     p = ggplot(df.tmp, aes_string(., "prop")) +
       geom_bar(stat = "identity", width = df.tmp$perc, color = twocol[2], fill = alpha(twocol[2], 0.2)) +
-      labs(title = paste0(.," (Imp.=", varimp[.], ")"), x = "", y = "Proportion Target=Y") +
+      labs(title = paste0(.," (VI:", varimp[.], ")"), x = "", y = "Proportion Target=Y") +
       geom_hline(yintercept = sum(df[["target"]]=="Y")/nrow(df), linetype = 2, color = "darkgrey") +
       scale_x_discrete(limits = rev(df.tmp[[.]])) + 
       coord_flip() +
@@ -186,9 +187,8 @@ plot_distr_nomi = function(outpdf, df = df.plot, vars = nomi, color = twocol,
 
 
 
-
 ## Plot correlation of metric variables
-plot_corr_metr <- function(outpdf, df, vars, method = "Spearman", 
+plot_corr_metr <- function(outpdf, df, vars=metr, misspct, method = "Spearman", 
                            w = 8, h = 8) {
 
   # Correlation matrix
@@ -201,16 +201,17 @@ plot_corr_metr <- function(outpdf, df, vars, method = "Spearman",
   
   # Adapt labels
   rownames(m.corr) = colnames(m.corr) =
-    paste0(rownames(m.corr)," (NA: ",round(100 * map_dbl(df[rownames(m.corr)],
-                                                         ~ sum(is.na(.))) / nrow(df), 2), "%)")
+    paste0(rownames(m.corr)," (", round(100*misspct[rownames(m.corr)],1),"% imp.)")
   
   # Put in clustered order
   m.corr[which(is.na(m.corr))] = 0 #set NAs to 0
   ord = corrMatOrder(m.corr , order = "hclust")
   m.corr = m.corr[ord, ord]
+  d3heatmap(m.corr, colors = "Blues", sym = TRUE, xaxis_font_size = paste0(h, "pt"), xaxis_height = 120, yaxis_width = 160)
   
   # Output as widget (clusters again and might therefore create different order)
-  saveWidget(d3heatmap(m.corr, colors = "Blues", sym = TRUE, xaxis_font_size = paste0(h, "pt")), 
+  saveWidget(d3heatmap(m.corr, colors = "Blues", sym = TRUE, xaxis_font_size = paste0(h, "pt"),
+                         xaxis_height = h*20, yaxis_width = w*40), 
              file = normalizePath(paste0(str_split(outpdf,".pdf", simplify = TRUE)[1,1],".html"), mustWork = FALSE))
 
   # Output as ggplot
@@ -224,7 +225,7 @@ plot_corr_metr <- function(outpdf, df, vars, method = "Spearman",
     scale_x_discrete(limits = rev(rownames(m.corr))) +
     scale_y_discrete(limits = rownames(m.corr)) +
     labs(title = paste0(method," Correlation"), fill = "", x = "", y = "") +
-    theme_my
+    theme_my + theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
   ggsave(outpdf, p, width = w, height = h)
 }
 
@@ -426,7 +427,7 @@ plot_variableimportance = function(outpdf, vars, fit = fit.gbm, l.boot = NULL,
 
 
 ## Partial Depdendence
-plot_partialdependence = function(outpdf, vars, df = df.interpret, fit = fit.gbm, l.boot = NULL, 
+plot_partialdependence = function(outpdf, vars, df = df.interpret, fit = fit.gbm, l.boot = NULL, CI = FALSE,
                                   ylim = c(0,1), ncols = 5, nrows = 2, w = 18, h = 12) {
 
   # Final model
@@ -437,7 +438,7 @@ plot_partialdependence = function(outpdf, vars, df = df.interpret, fit = fit.gbm
   
   # Plot
   plots = map(vars, ~ {
-    
+    #.=vars[2]
     # Plot data (must be adapted due to offset of plot(gbm) and possible undersampling)
     
     df.plot = plot(model, i.var = ., type = "link", return.grid = TRUE) #get plot data on link level
@@ -480,14 +481,28 @@ plot_partialdependence = function(outpdf, vars, df = df.interpret, fit = fit.gbm
         df.plot_boot
       } , .id = "run")
       
+      df.plot = left_join(df.plot, df.tmpboot %>% group_by_(varactual) %>% summarise(sd = sd(y))) %>% 
+        mutate(ymin = y - 1.96*sd, ymax = y + 1.96*sd)
+      
       if (is.factor(df[,.])) {
-        p = p + 
-          geom_line(aes_string(., "y", group = "run"), df.tmpboot, color = "lightgrey", size = 0.1) +
-          geom_point(aes_string(., "y", group = "run"), df.tmpboot, color = "black", size = 0.3)
+        if (CI == TRUE) {
+          p = p + 
+            geom_errorbar(aes_string(., ymin = "ymin", ymax = "ymax"), data = df.plot, size = 0.5, width = 0.25)
+          
+        } else {
+          p = p + 
+            geom_line(aes_string(., "y", group = "run"), df.tmpboot, color = "lightgrey", size = 0.1) +
+            geom_point(aes_string(., "y", group = "run"), df.tmpboot, color = "black", size = 0.3)
+          }
       } else {
-        p = p + 
-          geom_line(aes_string(., "y", group = "run"), df.tmpboot, color = "lightgrey") +
-          geom_line(aes_string(., "y"), df.plot, stat = "identity", color = "black") #plot black line again
+        if (CI == TRUE) {
+          p = p +             
+            geom_ribbon(aes_string(., ymin = "ymin", ymax = "ymax"), data = df.plot, alpha = 0.2)
+        } else {
+          p = p + 
+            geom_line(aes_string(., "y", group = "run"), df.tmpboot, color = "lightgrey") +
+            geom_line(aes_string(., "y"), df.plot, stat = "identity", color = "black") #plot black line again
+        }
       }
     }
     # Add (prior) base probability
